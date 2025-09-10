@@ -364,7 +364,7 @@ const AdComponent = () => {
       configScript.type = 'text/javascript';
       configScript.innerHTML = `
       	atOptions = {
-      		'key' : '428937b9b020a99f95953b0889f9aec7',
+      		'key' : '7252e1f3df1001afa199bfeedfcfa00b',
       		'format' : 'iframe',
       		'height' : 90,
       		'width' : 728,
@@ -374,7 +374,7 @@ const AdComponent = () => {
 
       const invokeScript = document.createElement('script');
       invokeScript.type = 'text/javascript';
-      invokeScript.src = "//www.highperformanceformat.com/428937b9b020a99f95953b0889f9aec7/invoke.js";
+      invokeScript.src = "//www.highperformanceformat.com/7252e1f3df1001afa199bfeedfcfa00b/invoke.js";
       invokeScript.async = true;
 
       container.appendChild(configScript);
@@ -385,7 +385,7 @@ const AdComponent = () => {
   useEffect(() => {
     loadAd(); // Initial load
     
-    const refreshInterval = 90000; // 1.5 minutes in milliseconds
+    const refreshInterval = 30000; // 30 seconds in milliseconds
     const intervalId = setInterval(loadAd, refreshInterval);
 
     return () => clearInterval(intervalId); // Cleanup on unmount

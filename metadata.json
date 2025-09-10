@@ -1,0 +1,6 @@
+{
+  "name": "CSV Metadata Generator",
+  "description": "Lightweight web application to batch-create metadata for media files (images and videos) using AI. Features a global progress bar and summary report, and exports to Adobestock and Shutterstock standard CSV format.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
