@@ -161,6 +161,44 @@
       }
       .text-success { color: var(--color-success); }
       .text-fail { color: var(--color-fail); }
+
+      .slider-hud {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        background: var(--color-panel-light);
+        outline: none;
+        opacity: 0.8;
+        transition: opacity .2s;
+        border-radius: 2px;
+        border: 1px solid var(--color-panel-border);
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+      }
+      .slider-hud:hover {
+        opacity: 1;
+      }
+      .slider-hud::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 24px;
+        background: var(--color-accent-primary);
+        cursor: pointer;
+        border-radius: 2px;
+        box-shadow: 0 0 10px var(--color-accent-primary), 0 0 5px #fff, inset 0 0 3px rgba(0,0,0,0.4);
+        border: 1px solid var(--color-background);
+        margin-top: -10px;
+      }
+      .slider-hud::-moz-range-thumb {
+        width: 14px;
+        height: 22px;
+        background: var(--color-accent-primary);
+        cursor: pointer;
+        border-radius: 2px;
+        border: 1px solid var(--color-background);
+        box-shadow: 0 0 10px var(--color-accent-primary), 0 0 5px #fff, inset 0 0 3px rgba(0,0,0,0.4);
+      }
     </style>
   <!-- Add Babel for JSX Transpilation -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -348,6 +386,29 @@ const Button = ({
       )}
       {children}
     </button>
+  );
+};
+
+// --- from components/Slider.tsx ---
+const Slider = ({ label, value, onChange, min, max, step = 1, description }) => {
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <label className="block text-sm font-bold text-text-secondary uppercase">{label}</label>
+        <span className="text-accent-primary font-bold glow-text-primary text-lg">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={onChange}
+        className="w-full slider-hud"
+        aria-label={label}
+      />
+      {description && <p className="text-xs text-text-secondary mt-2">{description}</p>}
+    </div>
   );
 };
 
@@ -664,6 +725,9 @@ const App = () => {
   const settingsRef = useRef({ maxTitleLength, maxKeywords, batchSize });
   const prevProcessingState = usePrevious(processingState);
   const logContainerRef = useRef(null);
+  const autoResumeTimerRef = useRef(null);
+  const wasAutoPausedRef = useRef(false);
+
 
   const getAdobeCategoryNumber = (categoryString) => {
     if (!categoryString) return '';
@@ -693,6 +757,44 @@ const App = () => {
     };
     setLogs(prevLogs => [newLog, ...prevLogs]);
   }, []);
+
+  // Effect to auto-pause on 15s of inactivity in the log while running
+  useEffect(() => {
+    if (processingState !== 'running') {
+      return;
+    }
+
+    const inactivityTimeout = setTimeout(() => {
+      addLog("Auto-paused due to inactivity.", 'info');
+      wasAutoPausedRef.current = true;
+      setProcessingState('paused');
+    }, 15000);
+
+    // This effect's cleanup clears the timer. It re-runs on new logs, resetting the timer.
+    return () => clearTimeout(inactivityTimeout);
+  }, [logs, processingState, addLog]);
+
+
+  // Effect to auto-resume 2s after an auto-pause
+  useEffect(() => {
+    if (processingState === 'paused' && wasAutoPausedRef.current) {
+      wasAutoPausedRef.current = false; // Reset the flag immediately
+
+      const autoResumeTimeout = setTimeout(() => {
+        addLog("Auto-resuming process...", 'info');
+        setProcessingState('running');
+      }, 2000);
+
+      autoResumeTimerRef.current = autoResumeTimeout;
+
+      return () => {
+          if (autoResumeTimerRef.current) {
+              clearTimeout(autoResumeTimerRef.current)
+          }
+      };
+    }
+  }, [processingState, addLog]);
+
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -881,6 +983,7 @@ const App = () => {
 
   const handlePause = () => {
     addLog("Processing paused by user.");
+    wasAutoPausedRef.current = false; // Ensure auto-resume doesn't trigger
     setProcessingState('paused');
   }
   const handleResume = () => {
@@ -889,6 +992,9 @@ const App = () => {
   }
   const handleStop = () => {
     addLog("Processing stopped by user.");
+    if (autoResumeTimerRef.current) {
+        clearTimeout(autoResumeTimerRef.current);
+    }
     setProcessingState('idle');
     currentIndexRef.current = 0;
     filesToProcessRef.current = [];
@@ -904,6 +1010,11 @@ const App = () => {
     setTotalToProcess(0);
     setLogs([]);
   };
+
+  const triggerAdAndDownload = useCallback((downloadFunction) => {
+    downloadFunction();
+    window.open('https://niecesprivilegelimelight.com/jge9r7kdk?key=2b8a2015fce17e8686bb3c28fc61df61', '_blank');
+  }, []);
 
   const escapeCsvField = (field) => {
     if (field === undefined || field === null) return '';
@@ -1068,16 +1179,16 @@ const App = () => {
           <AdComponent />
 
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-8 border-t border-panel-light pt-6 flex-wrap">
-                <Button onClick={handleExportAdobeCsv} variant="outline" disabled={report.successful.length === 0}>
+                <Button onClick={() => triggerAdAndDownload(handleExportAdobeCsv)} variant="outline" disabled={report.successful.length === 0}>
                     <DownloadIcon className="w-4 h-4 mr-2" /> Adobe CSV
                 </Button>
-                <Button onClick={handleExportShutterstockCsv} variant="outline" disabled={report.successful.length === 0}>
+                <Button onClick={() => triggerAdAndDownload(handleExportShutterstockCsv)} variant="outline" disabled={report.successful.length === 0}>
                     <DownloadIcon className="w-4 h-4 mr-2" /> Shutterstock CSV
                 </Button>
-                <Button onClick={handleExportVecteezyCsv} variant="outline" disabled={report.successful.length === 0}>
+                <Button onClick={() => triggerAdAndDownload(handleExportVecteezyCsv)} variant="outline" disabled={report.successful.length === 0}>
                     <DownloadIcon className="w-4 h-4 mr-2" /> Vecteezy CSV
                 </Button>
-                <Button onClick={handleExportFreepikCsv} variant="outline" disabled={report.successful.length === 0}>
+                <Button onClick={() => triggerAdAndDownload(handleExportFreepikCsv)} variant="outline" disabled={report.successful.length === 0}>
                     <DownloadIcon className="w-4 h-4 mr-2" /> Freepik CSV
                 </Button>
                 <Button onClick={handleRetryFailed} variant="secondary" disabled={report.failed.length === 0}>
@@ -1224,28 +1335,28 @@ const App = () => {
         <section className={`p-6 panel-hud`}>
             <div className="panel-hud-footer"></div>
             <h3 className="text-xl font-bold text-panel-border glow-text-cyan mb-4 border-b border-panel-light pb-3 uppercase tracking-widest">AI Configuration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                    <label htmlFor="maxTitleLength" className="block text-sm font-bold text-text-secondary mb-2">MAX TITLE LENGTH</label>
-                    <input type="number" id="maxTitleLength" value={maxTitleLength}
-                        onChange={(e) => setMaxTitleLength(Math.max(10, parseInt(e.target.value, 10) || 10))}
-                        className={inputStyles} min="10" max="200" />
-                     <p className="text-xs text-text-secondary mt-1">Max characters for description.</p>
-                </div>
-                <div>
-                    <label htmlFor="maxKeywords" className="block text-sm font-bold text-text-secondary mb-2">MAX KEYWORDS</label>
-                    <input type="number" id="maxKeywords" value={maxKeywords}
-                        onChange={(e) => setMaxKeywords(Math.max(5, parseInt(e.target.value, 10) || 5))}
-                        className={inputStyles} min="5" max="49" />
-                     <p className="text-xs text-text-secondary mt-1">Total keywords (5-49).</p>
-                </div>
-                <div>
-                    <label htmlFor="batchSize" className="block text-sm font-bold text-text-secondary mb-2">PROCESS BATCH SIZE</label>
-                    <input type="number" id="batchSize" value={batchSize}
-                        onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className={inputStyles} min="1" max="10" />
-                     <p className="text-xs text-text-secondary mt-1">Files processed concurrently (1-10).</p>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <Slider 
+                    label="Max Title Length"
+                    value={maxTitleLength}
+                    onChange={(e) => setMaxTitleLength(parseInt(e.target.value, 10))}
+                    min={10} max={200}
+                    description="Max characters for description."
+                />
+                <Slider 
+                    label="Max Keywords"
+                    value={maxKeywords}
+                    onChange={(e) => setMaxKeywords(parseInt(e.target.value, 10))}
+                    min={5} max={49}
+                    description="Total keywords (5-49)."
+                />
+                <Slider 
+                    label="Process Batch Size"
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(parseInt(e.target.value, 10))}
+                    min={1} max={10}
+                    description="Files processed concurrently (1-10)."
+                />
             </div>
         </section>
 
